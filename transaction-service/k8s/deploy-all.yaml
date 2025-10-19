@@ -1,0 +1,151 @@
+# Archivo completo para desplegar todos los recursos de Kubernetes
+# Ejecutar con: kubectl apply -f k8s/deploy-all.yaml
+
+---
+# Secret para credenciales de base de datos
+apiVersion: v1
+kind: Secret
+metadata:
+  name: transaction-secrets
+  labels:
+    app: transaction-service
+type: Opaque
+data:
+  DB_HOST: cG9zdGdyZXM=
+  DB_PORT: NTQzMg==
+  DB_USERNAME: cG9zdGdyZXM=
+  DB_PASSWORD: cGFzc3dvcmQ=
+  DB_DATABASE: dHJhbnNhY3Rpb25fZGI=
+
+---
+# ConfigMap para configuración de la aplicación
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transaction-config
+  labels:
+    app: transaction-service
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  HIGH_AMOUNT_THRESHOLD: "10000"
+  RAPID_SUCCESSION_TIME_WINDOW: "300000"
+  RAPID_SUCCESSION_COUNT: "3"
+
+---
+# Deployment de la aplicación
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-service
+  labels:
+    app: transaction-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: transaction-service
+  template:
+    metadata:
+      labels:
+        app: transaction-service
+    spec:
+      containers:
+      - name: transaction-service
+        image: transaction-service:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: transaction-config
+              key: NODE_ENV
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: transaction-secrets
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: transaction-secrets
+              key: DB_PORT
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: transaction-secrets
+              key: DB_USERNAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: transaction-secrets
+              key: DB_PASSWORD
+        - name: DB_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: transaction-secrets
+              key: DB_DATABASE
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Service para exponer la aplicación
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  labels:
+    app: transaction-service
+spec:
+  selector:
+    app: transaction-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+
+---
+# Ingress para acceso externo (opcional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: transaction-service-ingress
+  labels:
+    app: transaction-service
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: transaction-service.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: transaction-service
+            port:
+              number: 80
+

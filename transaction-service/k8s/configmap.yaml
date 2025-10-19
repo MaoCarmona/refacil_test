@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transaction-config
+  labels:
+    app: transaction-service
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  # Configuración de fraude
+  HIGH_AMOUNT_THRESHOLD: "10000"
+  RAPID_SUCCESSION_TIME_WINDOW: "300000"  # 5 minutos en ms
+  RAPID_SUCCESSION_COUNT: "3"
+
